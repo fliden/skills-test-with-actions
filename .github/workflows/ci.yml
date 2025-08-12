@@ -13,24 +13,30 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  build:                       # ===== JOB =====
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+    steps:                     # ===== STEPS =====
       - uses: actions/checkout@v4
 
-      - name: Run markdown lint
+      - name: Run remark (produce JSON)
+        id: remark
+        continue-on-error: true        # allow pipeline to continue to upload the artifact
         run: |
           npm install remark-cli remark-preset-lint-consistent vfile-reporter-json
-          npx remark . --use remark-preset-lint-consistent --report vfile-reporter-json 2> remark-lint-report.json
+          # Capture BOTH stdout and stderr so the JSON actually lands in the file
+          npx remark . --use remark-preset-lint-consistent --report vfile-reporter-json --frail \
+            > remark-lint-report.json 2>&1 \
+            || echo "REMARK_FAILED=1" >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
+        if: always()                    # upload even if the previous step "failed"
         with:
           name: remark-lint-report
           path: remark-lint-report.json
+
+      - name: Fail if remark failed
+        if: env.REMARK_FAILED == '1'
+        run: |
+          echo "remark found problems (see artifact)" >&2
+          exit 1
